@@ -14,7 +14,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from guardrail_summarizer.config import Config
-from guardrail_summarizer.pipeline import Result, build, normalize, select
+from guardrail_summarizer.pipeline import Result, Rule, build, normalize, prune, select
 from guardrail_summarizer.schemas import (
     Cluster,
     ClusterResult,
@@ -138,7 +138,53 @@ def test_select_orders_by_score_and_caps():
 
 
 def run_build() -> Result:
-    return build(normalize(ROWS), Config(top_k=40, min_score_ratio=0.0), llm=StubLLM())
+    return build(
+        normalize(ROWS),
+        Config(top_k=40, min_score_ratio=0.0, min_rule_share=0.0),
+        llm=StubLLM(),
+    )
+
+
+def test_prune_drops_rules_below_the_consensus_share():
+    rules = [Rule(text="a", theme="t", score=3452, sources=[0]),
+             Rule(text="b", theme="t", score=512, sources=[1]),
+             Rule(text="c", theme="t", score=188, sources=[2])]
+    kept, dropped = prune(rules, Config(min_rule_share=0.10))
+    assert [r.text for r in kept] == ["a", "b"]
+    assert [r.text for r in dropped] == ["c"]
+
+
+def test_prune_never_empties_the_rule_set():
+    rules = [Rule(text="only", theme="t", score=1, sources=[0])]
+    kept, dropped = prune(rules, Config(min_rule_share=0.99))
+    assert len(kept) == 1 and not dropped
+
+
+def test_prune_disabled_at_zero():
+    rules = [Rule(text="a", theme="t", score=1000, sources=[0]),
+             Rule(text="b", theme="t", score=1, sources=[1])]
+    kept, dropped = prune(rules, Config(min_rule_share=0.0))
+    assert len(kept) == 2 and not dropped
+
+
+def test_regression_novelty_rule_from_first_live_run():
+    """Weights observed in the first real run against data_sim.
+
+    'Speak like a pirate at all times' (188) reached the composed prompt because
+    the only weight filter ran before clustering, where 188 looked reasonable
+    against a top *submission* of 1842. After clustering the top *rule* is 3452,
+    making it 5.4% -- below consensus.
+    """
+    rules = [
+        Rule(text="honesty cluster", theme="honesty", score=3452, sources=[0, 1]),
+        Rule(text="preamble cluster", theme="shape", score=3055, sources=[2, 3]),
+        Rule(text="Never use em dashes.", theme="style", score=733, sources=[4]),
+        Rule(text="Use metric units and 24-hour time.", theme="style", score=512, sources=[5]),
+        Rule(text="Speak like a pirate at all times.", theme="style", score=188, sources=[6]),
+    ]
+    kept, dropped = prune(rules, Config())
+    assert [r.text for r in dropped] == ["Speak like a pirate at all times."]
+    assert any("metric units" in r.text for r in kept), "14.8% must survive the 10% floor"
 
 
 def test_injection_is_screened_out():

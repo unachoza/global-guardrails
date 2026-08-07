@@ -28,7 +28,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--top-k", type=int, default=Config.top_k,
                     help="cap on submissions reaching the LLM stages")
     ap.add_argument("--min-score-ratio", type=float, default=Config.min_score_ratio,
-                    help="floor as a fraction of the top score (0-1)")
+                    help="pre-cluster floor as a fraction of the top score (0-1)")
+    ap.add_argument("--min-rule-share", type=float, default=Config.min_rule_share,
+                    help="post-cluster floor: drop rules below this share of the top rule")
     ap.add_argument("--words", type=int, default=Config.target_words,
                     help="approximate word budget for the prompt")
     ap.add_argument("--policy", choices=("scope", "score"), default=Config.conflict_policy,
@@ -41,6 +43,7 @@ def main(argv: list[str] | None = None) -> int:
     cfg = Config(
         top_k=args.top_k,
         min_score_ratio=args.min_score_ratio,
+        min_rule_share=args.min_rule_share,
         target_words=args.words,
         conflict_policy=args.policy,
         screen_model=args.screen_model,

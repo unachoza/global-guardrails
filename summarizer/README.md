@@ -31,8 +31,8 @@ Tests run without an API key — the LLM stages are stubbed, so CI costs nothing
 ## Pipeline
 
 ```
-normalize -> select -> screen -> cluster -> resolve -> compose -> validate
-  (local)   (local)    (LLM)     (LLM)      (LLM)      (LLM)      (LLM)
+normalize -> select -> screen -> cluster -> resolve -> prune -> compose -> validate
+  (local)   (local)    (LLM)     (LLM)      (LLM)     (local)   (LLM)      (LLM)
 ```
 
 | Stage | Does |
@@ -42,8 +42,25 @@ normalize -> select -> screen -> cluster -> resolve -> compose -> validate
 | `screen` | Drop injections, unsafe asks, non-rules. Judges validity, never popularity |
 | `cluster` | Group submissions asking for the same thing; sum their scores |
 | `resolve` | Reconcile rules that cannot all be satisfied at once |
+| `prune` | Drop rules below a share of the top *rule*'s weight — consensus filter |
 | `compose` | Write the prompt: grouped, weighted, plain language |
 | `validate` | Every line traces to a rule; no contradictions; nothing injected survived |
+
+### Why there are two weight filters
+
+`select` compares raw submissions and exists to cap cost. `prune` compares
+*clustered* rules and exists to enforce consensus. They cannot be collapsed into
+one: before clustering, a lone novelty is indistinguishable from a real rule that
+happens to have been phrased once, so any pre-cluster floor strict enough to
+catch the novelty would also delete genuine single-phrasing rules.
+
+This is not hypothetical. In the first live run against `data_sim`, *"Speak like
+a pirate at all times"* (188) cleared the pre-cluster floor of 93 and landed in
+the finished prompt. After clustering, the top rule weighed 3452 — making the
+novelty 5.4%, plainly below consensus. `prune` is that second look.
+
+It is a consensus threshold, not a taste filter: a joke rule that genuinely wins
+the vote still ships. That is the community's call, not the pipeline's.
 
 Cost is flat in the number of LLM calls (~5), not the number of submissions —
 `select` caps what reaches the model and `screen`/`cluster` batch what remains. A

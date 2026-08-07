@@ -10,6 +10,7 @@ from .pipeline import (
     build_from_file,
     load,
     normalize,
+    prune,
     select,
 )
 from .schemas import Submission
@@ -25,5 +26,6 @@ __all__ = [
     "build_from_file",
     "load",
     "normalize",
+    "prune",
     "select",
 ]

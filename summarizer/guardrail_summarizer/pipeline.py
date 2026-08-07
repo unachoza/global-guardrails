@@ -64,6 +64,7 @@ class Result:
     rules: list[Rule]
     submissions: list[Submission]
     rejected: list[tuple[int, str]]
+    pruned: list[Rule]
     conflicts: list[Conflict]
     validation: ValidationResult | None
     stats: dict[str, Any]
@@ -92,6 +93,10 @@ class Result:
             "rejected": [
                 {"index": i, "submission": self.submissions[i].submission, "reason": why}
                 for i, why in self.rejected
+            ],
+            "pruned": [
+                {"text": r.text, "weight": r.score, "reason": "below consensus threshold"}
+                for r in self.pruned
             ],
             "conflicts": [c.model_dump() for c in self.conflicts],
             "validation": self.validation.model_dump() if self.validation else None,
@@ -362,6 +367,26 @@ def resolve(llm: LLM, rules: Sequence[Rule], cfg: Config) -> tuple[list[Rule], l
     return sorted(kept + added, key=lambda r: r.score, reverse=True), result.conflicts
 
 
+def prune(rules: Sequence[Rule], cfg: Config) -> tuple[list[Rule], list[Rule]]:
+    """Drop rules the community didn't actually converge on.
+
+    This has to run after clustering, not before. `select`'s floor compares raw
+    submissions, where a lone novelty is indistinguishable from a real rule that
+    happens to have been phrased once. Only after clustering has aggregated
+    consensus does a share-of-top comparison mean anything.
+
+    Returns (kept, dropped) so the manifest can show what was cut and why.
+    """
+    if not rules or cfg.min_rule_share <= 0:
+        return list(rules), []
+    top = max(r.score for r in rules)
+    floor = top * cfg.min_rule_share
+    kept = [r for r in rules if r.score >= floor]
+    dropped = [r for r in rules if r.score < floor]
+    # Never prune everything, however lopsided the distribution.
+    return (kept, dropped) if kept else (list(rules), [])
+
+
 def compose(llm: LLM, rules: Sequence[Rule], cfg: Config) -> str:
     if not rules:
         raise PipelineError("nothing survived screening; cannot compose a prompt")
@@ -417,6 +442,10 @@ def build(
     real = [c for c in conflicts if c.resolution != "keep_both"]
     say("resolve", f"{len(real)} conflict(s) resolved, {len(rules)} rules remain")
 
+    rules, pruned = prune(rules, cfg)
+    if pruned:
+        say("prune", f"{len(pruned)} below-consensus rule(s) dropped, {len(rules)} remain")
+
     prompt = compose(llm, rules, cfg)
     say("compose", f"{len(prompt.split())} words")
 
@@ -433,12 +462,14 @@ def build(
         rules=rules,
         submissions=list(subs),
         rejected=rejected,
+        pruned=pruned,
         conflicts=conflicts,
         validation=report,
         stats={
             "submissions_in": len(subs),
             "selected": len(selected),
             "screened_out": len(rejected),
+            "pruned_below_consensus": len(pruned),
             "rules_out": len(rules),
             "conflicts_resolved": len(real),
             "prompt_words": len(prompt.split()),
