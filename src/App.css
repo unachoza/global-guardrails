@@ -6,14 +6,65 @@
   background: var(--accent-bg);
   border: 2px solid transparent;
   transition: border-color 0.3s;
-  margin-bottom: 24px;
 
-  &:hover {
+  &:hover:not(:disabled) {
     border-color: var(--accent-border);
   }
   &:focus-visible {
     outline: 2px solid var(--accent);
     outline-offset: 2px;
+  }
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+}
+
+.guardrail-form {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+  width: 100%;
+  max-width: 480px;
+}
+
+.guardrail-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  font: inherit;
+  font-size: 16px;
+  padding: 5px 10px;
+  border-radius: 5px;
+  color: var(--text-h);
+  background: var(--bg);
+  border: 1px solid var(--border);
+
+  &::placeholder {
+    color: var(--text);
+  }
+  &:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+}
+
+.guardrail-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  text-align: left;
+  width: 100%;
+  max-width: 480px;
+
+  li {
+    padding: 8px 12px;
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    color: var(--text-h);
+
+    & + li {
+      margin-top: 8px;
+    }
   }
 }
 
