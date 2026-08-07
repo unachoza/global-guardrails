@@ -1,0 +1,11 @@
+# Scoped to the summarizer workstream so the repo-root .gitignore stays untouched.
+
+.venv/
+__pycache__/
+*.pyc
+out/
+
+# Real submission exports are user-generated content. Keep them out of a public
+# repo -- drop them in locally, commit nothing but the README.
+data_real/*.json
+!data_real/README.md
