@@ -5,6 +5,10 @@ __pycache__/
 *.pyc
 out/
 
+# Never commit credentials.
+.env
+.env.*
+
 # Real submission exports are user-generated content. Keep them out of a public
 # repo -- drop them in locally, commit nothing but the README.
 data_real/*.json
